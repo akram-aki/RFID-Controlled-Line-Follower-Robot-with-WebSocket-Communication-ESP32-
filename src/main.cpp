@@ -12,7 +12,7 @@ float Kd = 0.1;
 int baseSpeed = 80;
 int maxSpeed = 160;
 int lastError = 0;
-
+int lastpos;
 // Motor pin definitions (L298N Motor Driver)
 const int IN1 = 27; // Left motor direction 1
 const int IN2 = 14; // Left motor direction 2
@@ -60,53 +60,98 @@ void setup()
 
 void loop()
 {
-  // Read position and sensor values
-  uint16_t position = qtr.readLineBlack(sensorValues);
+  // 1) Grab raw calibrated values
+  qtr.read(sensorValues);
 
-  // Print raw sensor values
-  Serial.print("Sensors: ");
-  for (uint8_t i = 0; i < SensorCount; i++)
+  for (int i = 0; i < 8; i++)
   {
-    Serial.print(sensorValues[i]);
-    Serial.print(" ");
+    if (sensorValues[i] < 3500)
+    {
+      sensorValues[i] = 0;
+    }
+    else
+    {
+      sensorValues[i] = 1000;
+    }
   }
-  Serial.println();
+  Serial.println("");
+  // 2) Lost‑line detection
+  while (
+      sensorValues[0] == sensorValues[1] &&
+      sensorValues[1] == sensorValues[2] &&
+      sensorValues[2] == sensorValues[3] &&
+      sensorValues[3] == sensorValues[4] &&
+      sensorValues[4] == sensorValues[5] &&
+      sensorValues[5] == sensorValues[6] &&
+      sensorValues[6] == sensorValues[7])
+  {
+    bool spinCW = (lastError > 0); // spin direction based on last error
+    // Serial.print(lastError);
 
-  // PID error calculation
-  int error = position - 3500;
-  int motorSpeedAdjustment = Kp * error + Kd * (error - lastError);
+    // spin in place until ANY sensor sees the line again
+    if (lastpos > 3700)
+    {
+      Serial.println("Line lost! spin right");
+      digitalWrite(IN1, HIGH);
+      digitalWrite(IN2, LOW);
+      digitalWrite(IN3, LOW);
+      digitalWrite(IN4, HIGH);
+    }
+    else
+    {
+      Serial.println("Line lost! spin left");
+      digitalWrite(IN1, LOW);
+      digitalWrite(IN2, HIGH);
+      digitalWrite(IN3, HIGH);
+      digitalWrite(IN4, LOW);
+    }
+    analogWrite(ENA, 100);
+    analogWrite(ENB, 100);
+    qtr.read(sensorValues);
+    for (int i = 0; i < 8; i++)
+    {
+      if (sensorValues[i] < 3500)
+      {
+        sensorValues[i] = 0;
+      }
+      else
+      {
+        sensorValues[i] = 1000;
+      }
+    }
+
+    delay(10);
+  }
+
+  // 3) Normal PID line‑following
+  // Serial.println("Line found, resuming PID.");
+  uint16_t position = qtr.readLineBlack(sensorValues);
+  int error = (int)position - 3700;
+  int dError = error - lastError;
   lastError = error;
+  lastpos = position;
 
-  int leftSpeed = baseSpeed - motorSpeedAdjustment;
-  int rightSpeed = baseSpeed + motorSpeedAdjustment;
+  int adjust = Kp * error + Kd * dError;
+  int leftSpeed = constrain(baseSpeed - adjust, 0, maxSpeed);
+  int rightSpeed = constrain(baseSpeed + adjust, 0, maxSpeed);
 
-  // Constrain speeds
-  leftSpeed = constrain(leftSpeed, 0, maxSpeed);
-  rightSpeed = constrain(rightSpeed, 0, maxSpeed);
-
-  // Set motor directions to forward
+  // both motors forward
   digitalWrite(IN1, HIGH);
   digitalWrite(IN2, LOW);
   digitalWrite(IN3, HIGH);
   digitalWrite(IN4, LOW);
 
-  // Write speeds to motors
   analogWrite(ENA, leftSpeed);
   analogWrite(ENB, rightSpeed);
 
-  // Print direction decision
-  if (abs(leftSpeed - rightSpeed) < 10)
-  {
-    Serial.println("Direction: Forward");
-  }
-  else if (leftSpeed > rightSpeed)
-  {
-    Serial.println("Direction: left");
-  }
-  else
-  {
-    Serial.println("Direction: right");
-  }
+  // debug
+  Serial.print("Pos: ");
+  Serial.print(position);
+  // Serial.print("  Sum: "); Serial.print(sum);
+  Serial.print("  Speeds L/R: ");
+  Serial.print(leftSpeed);
+  Serial.print("/");
+  Serial.println(rightSpeed);
 
-  delay(100);
+  delay(50);
 }
