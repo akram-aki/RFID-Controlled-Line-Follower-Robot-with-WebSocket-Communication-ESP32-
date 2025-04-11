@@ -9,18 +9,25 @@ const uint8_t sensorPins[SensorCount] = {26, 25, 33, 32, 35, 34, 39, 36};
 // PID constants
 float Kp = 0.2;
 float Kd = 0.1;
-int baseSpeed = 80;
+int baseSpeed = 100;
 int maxSpeed = 160;
 int lastError = 0;
 int lastpos;
+
 // Motor pin definitions (L298N Motor Driver)
 const int IN1 = 27; // Left motor direction 1
 const int IN2 = 14; // Left motor direction 2
-const int ENA = 12; // Left motor PWM
+const int ENA = 12; // Left motor PWM pin
 
 const int IN3 = 15; // Right motor direction 1
 const int IN4 = 4;  // Right motor direction 2
-const int ENB = 13; // Right motor PWM
+const int ENB = 13; // Right motor PWM pin
+
+// ESP32 LEDC PWM configuration
+const int pwmFreq = 5000;    // PWM frequency in Hz
+const int pwmResolution = 8; // PWM resolution (8 bits: 0–255)
+const int leftChannel = 0;   // PWM channel for left motor
+const int rightChannel = 1;  // PWM channel for right motor
 
 void setup()
 {
@@ -33,11 +40,15 @@ void setup()
 
   pinMode(IN1, OUTPUT);
   pinMode(IN2, OUTPUT);
-  pinMode(ENA, OUTPUT);
-
   pinMode(IN3, OUTPUT);
   pinMode(IN4, OUTPUT);
-  pinMode(ENB, OUTPUT);
+
+  // Setup ESP32 LEDC PWM channels for the motor enable pins
+  ledcSetup(leftChannel, pwmFreq, pwmResolution);
+  ledcAttachPin(ENA, leftChannel);
+
+  ledcSetup(rightChannel, pwmFreq, pwmResolution);
+  ledcAttachPin(ENB, rightChannel);
 
   delay(1000);
 
@@ -85,10 +96,6 @@ void loop()
       sensorValues[5] == sensorValues[6] &&
       sensorValues[6] == sensorValues[7])
   {
-    bool spinCW = (lastError > 0); // spin direction based on last error
-    // Serial.print(lastError);
-
-    // spin in place until ANY sensor sees the line again
     if (lastpos > 3700)
     {
       Serial.println("Line lost! spin right");
@@ -105,8 +112,10 @@ void loop()
       digitalWrite(IN3, HIGH);
       digitalWrite(IN4, LOW);
     }
-    analogWrite(ENA, 100);
-    analogWrite(ENB, 100);
+    // Use LEDC in place of analogWrite for PWM outputs.
+    ledcWrite(leftChannel, 100);
+    ledcWrite(rightChannel, 100);
+
     qtr.read(sensorValues);
     for (int i = 0; i < 8; i++)
     {
@@ -124,7 +133,6 @@ void loop()
   }
 
   // 3) Normal PID line‑following
-  // Serial.println("Line found, resuming PID.");
   uint16_t position = qtr.readLineBlack(sensorValues);
   int error = (int)position - 3700;
   int dError = error - lastError;
@@ -135,19 +143,19 @@ void loop()
   int leftSpeed = constrain(baseSpeed - adjust, 0, maxSpeed);
   int rightSpeed = constrain(baseSpeed + adjust, 0, maxSpeed);
 
-  // both motors forward
+  // Set motors forward
   digitalWrite(IN1, HIGH);
   digitalWrite(IN2, LOW);
   digitalWrite(IN3, HIGH);
   digitalWrite(IN4, LOW);
 
-  analogWrite(ENA, leftSpeed);
-  analogWrite(ENB, rightSpeed);
+  // Use LEDC instead of analogWrite for PWM outputs.
+  ledcWrite(leftChannel, leftSpeed);
+  ledcWrite(rightChannel, rightSpeed);
 
   // debug
   Serial.print("Pos: ");
   Serial.print(position);
-  // Serial.print("  Sum: "); Serial.print(sum);
   Serial.print("  Speeds L/R: ");
   Serial.print(leftSpeed);
   Serial.print("/");
