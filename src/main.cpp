@@ -72,33 +72,14 @@ void setup()
 void loop()
 {
   // 1) Grab raw calibrated values
-  qtr.read(sensorValues);
+  qtr.readCalibrated(sensorValues);
 
-  for (int i = 0; i < 8; i++)
+  while (lastpos <= 1000 || lastpos >= 6000)
   {
-    if (sensorValues[i] < 3500)
+    if (lastpos >= 6000)
     {
-      sensorValues[i] = 0;
-    }
-    else
-    {
-      sensorValues[i] = 1000;
-    }
-  }
-  // Serial.println("");
-  // 2) Lost‑line detection
-  while (
-      sensorValues[0] == sensorValues[1] &&
-      sensorValues[1] == sensorValues[2] &&
-      sensorValues[2] == sensorValues[3] &&
-      sensorValues[3] == sensorValues[4] &&
-      sensorValues[4] == sensorValues[5] &&
-      sensorValues[5] == sensorValues[6] &&
-      sensorValues[6] == sensorValues[7])
-  {
-    if (lastpos > 3700)
-    {
-      // Serial.println("Line lost! spin right");
+      // Serial.print("line lost turn right");
+      Serial.println("Line lost! spin right");
       digitalWrite(IN1, HIGH);
       digitalWrite(IN2, LOW);
       digitalWrite(IN3, LOW);
@@ -106,7 +87,8 @@ void loop()
     }
     else
     {
-      // Serial.println("Line lost! spin left");
+      Serial.println("Line lost! spin left");
+      // Serial.print("line lost turn right");
       digitalWrite(IN1, LOW);
       digitalWrite(IN2, HIGH);
       digitalWrite(IN3, HIGH);
@@ -116,24 +98,20 @@ void loop()
     ledcWrite(leftChannel, 160);
     ledcWrite(rightChannel, 160);
 
-    qtr.read(sensorValues);
-    for (int i = 0; i < 8; i++)
-    {
-      if (sensorValues[i] < 3500)
-      {
-        sensorValues[i] = 0;
-      }
-      else
-      {
-        sensorValues[i] = 1000;
-      }
-    }
+    qtr.readCalibrated(sensorValues);
+    uint16_t position = readLine(sensorValues, lastpos);
+    lastpos = position;
 
     delay(10);
   }
 
   // 3) Normal PID line‑following
-  uint16_t position = qtr.readLineBlack(sensorValues);
+
+  qtr.readCalibrated(sensorValues);
+  // uint16_t position = qtr.readLineBlack(sensorValues);
+
+  uint16_t position = readLine(sensorValues, lastpos);
+
   int error = (int)position - 3700;
   int dError = error - lastError;
   lastError = error;
@@ -154,12 +132,47 @@ void loop()
   ledcWrite(rightChannel, rightSpeed);
 
   // debug
-  // Serial.print("Pos: ");
-  // Serial.print(position);
-  // Serial.print("  Speeds L/R: ");
-  // Serial.print(leftSpeed);
-  // Serial.print("/");
-  // Serial.println(rightSpeed);
+  for (int i = 0; i < 8; i++)
+  {
+    Serial.print(sensorValues[i]);
+    Serial.print(" ");
+  }
+  Serial.println("");
+  Serial.print("Pos: ");
+  Serial.print(position);
+  Serial.print("  Speeds L/R: ");
+  Serial.print(leftSpeed);
+  Serial.print("/");
+  Serial.println(rightSpeed);
 
   delay(50);
+}
+
+int getpos(uint16_t vals[8], int lastpos)
+{
+  int sum = 0;
+  int count = 0;
+  for (int i = 0; i < 8; i++)
+  {
+    sum += 1000 * i * vals[i];
+    count += vals[i];
+  }
+  if (count == 0)
+  {
+    return lastpos;
+  }
+
+  return sum / count;
+}
+
+// Read raw sensorValues[8], threshold at 1000, build a binary array,
+// then call getpos() to compute line position.
+int readLine(uint16_t sensorValues[8], int lastpos)
+{
+  uint16_t vals[8];
+  for (int i = 0; i < 8; i++)
+  {
+    vals[i] = (sensorValues[i] < 1000) ? 0 : 1;
+  }
+  return getpos(vals, lastpos);
 }
