@@ -77,8 +77,8 @@ void loop()
   int motorSpeedAdjustment = Kp * error + Kd * (error - lastError);
   lastError = error;
 
-  int leftSpeed = baseSpeed + motorSpeedAdjustment;
-  int rightSpeed = baseSpeed - motorSpeedAdjustment;
+  int leftSpeed = baseSpeed - motorSpeedAdjustment;
+  int rightSpeed = baseSpeed + motorSpeedAdjustment;
 
   // Constrain speeds
   leftSpeed = constrain(leftSpeed, 0, maxSpeed);
@@ -101,11 +101,11 @@ void loop()
   }
   else if (leftSpeed > rightSpeed)
   {
-    Serial.println("Direction: right");
+    Serial.println("Direction: left");
   }
   else
   {
-    Serial.println("Direction: left");
+    Serial.println("Direction: right");
   }
 
   delay(100);
