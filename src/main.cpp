@@ -85,7 +85,7 @@ void loop()
       sensorValues[i] = 1000;
     }
   }
-  Serial.println("");
+  // Serial.println("");
   // 2) Lost‑line detection
   while (
       sensorValues[0] == sensorValues[1] &&
@@ -98,7 +98,7 @@ void loop()
   {
     if (lastpos > 3700)
     {
-      Serial.println("Line lost! spin right");
+      // Serial.println("Line lost! spin right");
       digitalWrite(IN1, HIGH);
       digitalWrite(IN2, LOW);
       digitalWrite(IN3, LOW);
@@ -106,15 +106,15 @@ void loop()
     }
     else
     {
-      Serial.println("Line lost! spin left");
+      // Serial.println("Line lost! spin left");
       digitalWrite(IN1, LOW);
       digitalWrite(IN2, HIGH);
       digitalWrite(IN3, HIGH);
       digitalWrite(IN4, LOW);
     }
     // Use LEDC in place of analogWrite for PWM outputs.
-    ledcWrite(leftChannel, 100);
-    ledcWrite(rightChannel, 100);
+    ledcWrite(leftChannel, 160);
+    ledcWrite(rightChannel, 160);
 
     qtr.read(sensorValues);
     for (int i = 0; i < 8; i++)
@@ -154,12 +154,12 @@ void loop()
   ledcWrite(rightChannel, rightSpeed);
 
   // debug
-  Serial.print("Pos: ");
-  Serial.print(position);
-  Serial.print("  Speeds L/R: ");
-  Serial.print(leftSpeed);
-  Serial.print("/");
-  Serial.println(rightSpeed);
+  // Serial.print("Pos: ");
+  // Serial.print(position);
+  // Serial.print("  Speeds L/R: ");
+  // Serial.print(leftSpeed);
+  // Serial.print("/");
+  // Serial.println(rightSpeed);
 
   delay(50);
 }
