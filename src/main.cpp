@@ -253,8 +253,9 @@ void TaskLineFollow(void *parameter)
       digitalWrite(IN4, LOW);
       ledcWrite(leftChannel, 0);
       ledcWrite(rightChannel, 0);
-      digitalWrite(16);
-      delay(30000);              // pause for 5 seconds
+      digitalWrite(16, 1);
+      delay(30000); // pause for 5 seconds
+      digitalWrite(16, 0);
       stopLineFollowing = false; // reset the flag
       Serial.println("Resuming line following.");
     }
