@@ -4,13 +4,13 @@
 QTRSensors qtr;
 const uint8_t SensorCount = 8;
 uint16_t sensorValues[SensorCount];
-const uint8_t sensorPins[SensorCount] = {26, 25, 33, 32, 35, 34, 39, 36};
+const uint8_t sensorPins[SensorCount] = {36, 39, 34, 35, 32, 33, 25, 26};
 
 // PID constants
-float Kp = 0.2;
-float Kd = 0.1;
-int baseSpeed = 100;
-int maxSpeed = 160;
+float Kp = 0.05;
+float Kd = 0.03;
+int baseSpeed = 200;
+int maxSpeed = 255;
 int lastError = 0;
 int lastpos;
 
@@ -74,9 +74,9 @@ void loop()
   // 1) Grab raw calibrated values
   qtr.readCalibrated(sensorValues);
 
-  while (lastpos <= 1000 || lastpos >= 6000)
+  while (lastpos <= 1000 || lastpos >= 7000)
   {
-    if (lastpos >= 6000)
+    if (lastpos >= 7000)
     {
       // Serial.print("line lost turn right");
       Serial.println("Line lost! spin right");
@@ -112,14 +112,14 @@ void loop()
 
   uint16_t position = readLine(sensorValues, lastpos);
 
-  int error = (int)position - 3700;
+  int error = (int)position - 3500;
   int dError = error - lastError;
   lastError = error;
   lastpos = position;
 
   int adjust = Kp * error + Kd * dError;
-  int leftSpeed = constrain(baseSpeed - adjust, 0, maxSpeed);
-  int rightSpeed = constrain(baseSpeed + adjust, 0, maxSpeed);
+  int leftSpeed = constrain(baseSpeed + adjust, 0, maxSpeed);
+  int rightSpeed = constrain(baseSpeed - adjust, 0, maxSpeed);
 
   // Set motors forward
   digitalWrite(IN1, HIGH);
