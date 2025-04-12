@@ -8,6 +8,16 @@
 int state = 1;
 
 //====================
+// Global Variables for RFID Trigger
+//====================
+// Flag to indicate that the RFID card has been set for starting the line follower.
+volatile bool rfidInitialSet = false;
+// Holds the initial/stored RFID UID.
+String storedRFID = "";
+// Flag to indicate that a matching RFID scan was detected to pause line following.
+volatile bool stopLineFollowing = false;
+
+//====================
 // RFID / WebSocket Setup (Core 0)
 //====================
 
@@ -91,7 +101,25 @@ void TaskWebSocketRFID(void *parameter)
             uidStr += "0";
           uidStr += String(mfrc522.uid.uidByte[i], HEX);
         }
-        // Create the JSON payload with the scanned UID
+        Serial.print("Scanned UID: ");
+        Serial.println(uidStr);
+
+        // First time: store the UID and signal line follower to begin
+        if (!rfidInitialSet)
+        {
+          storedRFID = uidStr;
+          rfidInitialSet = true;
+          Serial.print("Stored UID for run: ");
+          Serial.println(storedRFID);
+        }
+        // If line following already started and the same UID is scanned, flag to stop.
+        else if (uidStr == storedRFID)
+        {
+          stopLineFollowing = true;
+          Serial.println("Matching UID scanned. Signaling to pause line following for 5 seconds.");
+        }
+
+        // Create the JSON payload with the scanned UID and send it via WebSocket.
         String jsonPayload = String("{ \"currentRFID\": \"") + uidStr + "\" }";
         webSocket.sendTXT(jsonPayload);
         Serial.print("Sent UID via WebSocket: ");
@@ -175,6 +203,14 @@ void TaskLineFollow(void *parameter)
   Serial.begin(115200);
   delay(1000);
 
+  // Wait until an RFID card has been scanned and stored before starting line following.
+  while (!rfidInitialSet)
+  {
+    Serial.println("Waiting for RFID card to start line following...");
+    delay(500);
+  }
+  Serial.println("RFID UID set. Starting line following.");
+
   // Sensor and motor pin setup
   qtr.setTypeAnalog();
   qtr.setSensorPins(sensorPins, SensorCount);
@@ -206,6 +242,23 @@ void TaskLineFollow(void *parameter)
   // Main loop for line following
   for (;;)
   {
+    // Check if RFID stop signal is triggered.
+    if (stopLineFollowing)
+    {
+      Serial.println("Pausing line following for 5 seconds due to RFID signal...");
+      // Stop motors
+      digitalWrite(IN1, LOW);
+      digitalWrite(IN2, LOW);
+      digitalWrite(IN3, LOW);
+      digitalWrite(IN4, LOW);
+      ledcWrite(leftChannel, 0);
+      ledcWrite(rightChannel, 0);
+      digitalWrite(16);
+      delay(30000);              // pause for 5 seconds
+      stopLineFollowing = false; // reset the flag
+      Serial.println("Resuming line following.");
+    }
+
     // 1) Read raw calibrated sensor values
     qtr.readCalibrated(sensorValues);
 
@@ -214,7 +267,7 @@ void TaskLineFollow(void *parameter)
     {
       if (lastpos >= 6500)
       {
-        Serial.println("Line lost! spin right");
+        Serial.println("Line lost! Spin right");
         digitalWrite(IN1, HIGH);
         digitalWrite(IN2, LOW);
         digitalWrite(IN3, LOW);
@@ -222,13 +275,13 @@ void TaskLineFollow(void *parameter)
       }
       else
       {
-        Serial.println("Line lost! spin left");
+        Serial.println("Line lost! Spin left");
         digitalWrite(IN1, LOW);
         digitalWrite(IN2, HIGH);
         digitalWrite(IN3, HIGH);
         digitalWrite(IN4, LOW);
       }
-      // Use LEDC to keep motors at a preset speed during spin
+      // Keep motors at a preset speed during spin
       ledcWrite(leftChannel, 160);
       ledcWrite(rightChannel, 160);
 
@@ -249,10 +302,9 @@ void TaskLineFollow(void *parameter)
         sensorValues[6] < 1000 &&
         sensorValues[7] < 1000)
     {
-
       if (lastpos < 3500)
       {
-        Serial.println("Line lost! spin left");
+        Serial.println("Line lost! Spin left");
         digitalWrite(IN1, LOW);
         digitalWrite(IN2, HIGH);
         digitalWrite(IN3, HIGH);
@@ -260,14 +312,13 @@ void TaskLineFollow(void *parameter)
       }
       else
       {
-        Serial.println("Line lost! spin right");
+        Serial.println("Line lost! Spin right");
         digitalWrite(IN1, HIGH);
         digitalWrite(IN2, LOW);
         digitalWrite(IN3, LOW);
         digitalWrite(IN4, HIGH);
       }
-
-      // Use LEDC to keep motors at a preset speed during spin
+      // Keep motors at a preset speed during spin
       ledcWrite(leftChannel, 160);
       ledcWrite(rightChannel, 160);
 
@@ -345,6 +396,6 @@ void setup()
 
 void loop()
 {
-  // Empty. T asks are running on both cores.
+  // Empty. Tasks are running on both cores.
   delay(10000);
 }
